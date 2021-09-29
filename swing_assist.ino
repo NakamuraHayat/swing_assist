@@ -1,10 +1,16 @@
-/* TODO: 角速度のデータも採る
- *  時間も採る
- *  割り込みを使う
+/* TODO:
+    割り込みを使う
 */
 
 #include "AD5328_1.h"
 #include "MPU9250.h"
+
+unsigned long time_from_start;
+unsigned long time_valve_start;
+
+float accx, accy, accz;
+float gyrox, gyroy, gyroz;
+float eulerx, eulery, eulerz;
 
 int cs1 = 10;
 int cs2 = 9;
@@ -15,11 +21,15 @@ MPU9250 mpu9250;
 
 float pres_MPa = 0.0; // 0~0.8MPA
 int valve_port_0 = 0;   // 0~15
+float valve_operate_time = 2.0; // second
 int valve_port_1 = 1;
 int valve_port_2 = 2;
-char show_start;
 
-void Valve(float pres_MPa, int valve_port);
+char show_start = '0';
+int flag = 1;
+
+void valve(float pres_MPa, int valve_port);
+void printPMU();
 
 void setup() {
   Serial.begin(9600);
@@ -27,79 +37,126 @@ void setup() {
   ad5328_2.begin();
   Wire.begin();
   mpu9250.setup(0x68);
+  mpu9250.selectFilter(QuatFilterSel::MAHONY);
+
 }
 
 void loop() {
-  if(mpu9250.update()){
-    Serial.print("X : ");
-    Serial.print(mpu9250.getAccX());
-    Serial.print("  ,  ");
-    Serial.print("Y : ");
-    Serial.print(mpu9250.getAccY());
-    Serial.print("  ,  ");
-    Serial.print("Z : ");
-    Serial.println(mpu9250.getAccZ());
-  }
-  
-  if (Serial.available()) {
-    show_start = Serial.read();
-    if (show_start == '1') {
-      pres_MPa = 0.6;
+  time_from_start = micros();
+  Serial.print(time_from_start);
+  Serial.print(",");
+  printPMU();
 
-      Valve(pres_MPa, valve_port_0);
-      Serial.print(valve_port_0);
-      Serial.print(" -> ");
-      Serial.println(pres_MPa);
+  if (flag == 1) {
+    if (Serial.available()) {
+      show_start = Serial.read();
+      if (show_start == '1') {
+        pres_MPa = 0.6;
 
-      Valve(pres_MPa, valve_port_1);
-      Serial.print(valve_port_1);
-      Serial.print(" -> ");
-      Serial.println(pres_MPa);
+        valve(pres_MPa, valve_port_0);
+        //Serial.print(valve_port_0);
+        //Serial.print(" -> ");
+        //Serial.println(pres_MPa);
 
-      Valve(pres_MPa, valve_port_2);
-      Serial.print(valve_port_2);
-      Serial.print(" -> ");
-      Serial.println(pres_MPa);
-/*
-      delay(2000);
+        valve(pres_MPa, valve_port_1);
+        //Serial.print(valve_port_1);
+        //Serial.print(" -> ");
+        //Serial.println(pres_MPa);
 
-      pres_MPa = 0;
-      Valve(pres_MPa, valve_port_0);
-      Serial.print(valve_port_0);
-      Serial.print(" -> ");
-      Serial.println(pres_MPa);
+        valve(pres_MPa, valve_port_2);
+        //Serial.print(valve_port_2);
+        //Serial.print(" -> ");
+        //Serial.println(pres_MPa);
 
-      Valve(pres_MPa, valve_port_1);
-      Serial.print(valve_port_1);
-      Serial.print(" -> ");
-      Serial.println(pres_MPa);
 
-      Valve(pres_MPa, valve_port_2);
-      Serial.print(valve_port_2);
-      Serial.print(" -> ");
-      Serial.println(pres_MPa);*/
+        time_valve_start = micros();
+        time_from_start = micros();
+        flag = 2;
+        Serial.println("valve start");
+      }
     }
+
+    //delay(2000);
+
     else if (show_start == '0') {
       pres_MPa = 0;
-      Valve(pres_MPa, valve_port_0);
-      Serial.print(valve_port_0);
-      Serial.print(" -> ");
-      Serial.println(pres_MPa);
+      valve(pres_MPa, valve_port_0);
+      //Serial.print(valve_port_0);
+      //Serial.print(" -> ");
+      //Serial.println(pres_MPa);
 
-      Valve(pres_MPa, valve_port_1);
-      Serial.print(valve_port_1);
-      Serial.print(" -> ");
-      Serial.println(pres_MPa);
+      valve(pres_MPa, valve_port_1);
+      //Serial.print(valve_port_1);
+      //Serial.print(" -> ");
+      //Serial.println(pres_MPa);
 
-      Valve(pres_MPa, valve_port_2);
-      Serial.print(valve_port_2);
-      Serial.print(" -> ");
-      Serial.println(pres_MPa);
+      valve(pres_MPa, valve_port_2);
+      //Serial.print(valve_port_2);
+      //Serial.print(" -> ");
+      //Serial.println(pres_MPa);
     }
+  }
+
+  else if (flag == 0) {
+    pres_MPa = 0;
+    valve(pres_MPa, valve_port_0);
+    //Serial.print(valve_port_0);
+    //Serial.print(" -> ");
+    //Serial.println(pres_MPa);
+
+    valve(pres_MPa, valve_port_1);
+    //Serial.print(valve_port_1);
+    //Serial.print(" -> ");
+    //Serial.println(pres_MPa);
+
+    valve(pres_MPa, valve_port_2);
+    //Serial.print(valve_port_2);
+    //Serial.print(" -> ");
+    //Serial.println(pres_MPa);
+
+    flag = 1;
+  }
+
+  if (uint32_t(time_from_start - time_valve_start) > (valve_operate_time * 1000000) && flag == 2) {
+    flag = 0;
+    Serial.println("valve stop");
   }
 }
 
-void Valve(float pres_MPa, int valve_port) {
+void printPMU() {
+  if (mpu9250.update()) {
+    accx = mpu9250.getAccX();
+    accy = mpu9250.getAccY();
+    accz = mpu9250.getAccZ();
+    gyrox = mpu9250.getGyroX();
+    gyroy = mpu9250.getGyroY();
+    gyroz = mpu9250.getGyroZ();
+    eulerx = mpu9250.getEulerX();
+    eulery = mpu9250.getEulerY();
+    eulerz = mpu9250.getEulerZ();
+  }
+
+  Serial.print(accx);
+  Serial.print(",");
+  Serial.print(accy);
+  Serial.print(",");
+  Serial.print(accz);
+  Serial.print(",");
+  Serial.print(gyrox);
+  Serial.print(",");
+  Serial.print(gyroy);
+  Serial.print(",");
+  Serial.print(gyroz);
+  Serial.print(",");
+  Serial.print(eulerx);
+  Serial.print(",");
+  Serial.print(eulery);
+  Serial.print(",");
+  Serial.print(eulerz);
+  Serial.println();
+}
+
+void valve(float pres_MPa, int valve_port) {
   float pres_bar    = 0.0;
   float V_amplifier = 0.0;
   float V_DAC       = 0.0;
@@ -114,63 +171,48 @@ void Valve(float pres_MPa, int valve_port) {
     case 0:
       ad5328_1.write(DAC_A, V_DAC_bit);
       break;
-
     case 1:
       ad5328_1.write(DAC_B, V_DAC_bit);
       break;
-
     case 2:
       ad5328_1.write(DAC_C, V_DAC_bit);
       break;
-
     case 3:
       ad5328_1.write(DAC_D, V_DAC_bit);
       break;
-
     case 4:
       ad5328_1.write(DAC_E, V_DAC_bit);
       break;
-
     case 5:
       ad5328_1.write(DAC_F, V_DAC_bit);
       break;
-
     case 6:
       ad5328_1.write(DAC_G, V_DAC_bit);
       break;
-
     case 7:
       ad5328_1.write(DAC_H, V_DAC_bit);
       break;
-
     case 8:
       ad5328_2.write(DAC_A, V_DAC_bit);
       break;
-
     case 9:
       ad5328_2.write(DAC_B, V_DAC_bit);
       break;
-
     case 10:
       ad5328_2.write(DAC_C, V_DAC_bit);
       break;
-
     case 11:
       ad5328_2.write(DAC_D, V_DAC_bit);
       break;
-
     case 12:
       ad5328_2.write(DAC_E, V_DAC_bit);
       break;
-
     case 13:
       ad5328_2.write(DAC_F, V_DAC_bit);
       break;
-
     case 14:
       ad5328_2.write(DAC_G, V_DAC_bit);
       break;
-
     case 15:
       ad5328_2.write(DAC_H, V_DAC_bit);
       break;
