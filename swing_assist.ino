@@ -20,13 +20,14 @@ AD5328 ad5328_2(cs2);
 MPU9250 mpu9250;
 
 float pres_MPa = 0.0; // 0~0.8MPA
-int valve_port_0 = 0;   // 0~15
+int valve_port_0 = 12;   // 0~15
 float valve_operate_time = 2.0; // second
-int valve_port_1 = 1;
-int valve_port_2 = 2;
+int valve_port_1 = 13;
+int valve_port_2 = 14;
 
 char show_start = '0';
 int flag = 1;
+const int din_pin = 7;
 
 void valve(float pres_MPa, int valve_port);
 void printPMU();
@@ -38,7 +39,7 @@ void setup() {
   Wire.begin();
   mpu9250.setup(0x68);
   mpu9250.selectFilter(QuatFilterSel::MAHONY);
-
+  pinMode(din_pin, INPUT_PULLUP);
 }
 
 void loop() {
@@ -51,6 +52,9 @@ void loop() {
     if (Serial.available()) {
       show_start = Serial.read();
       if (show_start == '1') {
+      //show_start = (char)digitalRead(din_pin);
+      //Serial.println((int)show_start);
+      //if((int)show_start == 1) {
         pres_MPa = 0.6;
 
         valve(pres_MPa, valve_port_0);
